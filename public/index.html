@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PB Live Studio Pro</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: #070914; color: #fff; display: flex; justify-content: center; height: 100vh; overflow: hidden; }
+    .mobile-frame { width: 100%; max-width: 440px; height: 100%; background: #0c1022; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+    /* Auth */
+    #authScreen { position: absolute; inset: 0; background: radial-gradient(circle at top, #1f1035, #070914); z-index: 999; display: flex; flex-direction: column; justify-content: center; padding: 28px; }
+    .brand-title { font-size: 26px; font-weight: 900; background: linear-gradient(135deg, #00f0ff, #ff0055); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-bottom: 24px; text-transform: uppercase; }
+    .custom-input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 12px; color: #fff; font-size: 13px; margin-bottom: 12px; outline: none; width: 100%; }
+    .btn-gradient { background: linear-gradient(135deg, #ff0055, #ff5e00); color: #fff; font-weight: bold; border: none; padding: 12px; border-radius: 12px; cursor: pointer; font-size: 14px; box-shadow: 0 4px 15px rgba(255,0,85,0.4); text-align: center; }
+
+    /* Top Bar */
+    .top-header { height: 54px; padding: 0 14px; display: flex; justify-content: space-between; align-items: center; background: #0e142a; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .brand-logo { font-weight: 900; font-size: 16px; color: #00f0ff; display: flex; align-items: center; gap: 6px; }
+    .btn-create-room { background: linear-gradient(90deg, #00f0ff, #0072ff); color: #000; font-weight: 800; font-size: 11px; padding: 6px 12px; border-radius: 20px; border: none; cursor: pointer; }
+
+    /* Lobby Tabs */
+    .tab-content { flex: 1; overflow-y: auto; display: none; flex-direction: column; padding: 12px 12px 70px; }
+    .tab-content.active { display: flex; }
+    .room-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .room-card { background: #131936; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); position: relative; cursor: pointer; }
+    .room-card img { width: 100%; height: 125px; object-fit: cover; }
+    .room-tag { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); font-size: 9px; font-weight: bold; padding: 3px 8px; border-radius: 10px; color: #00f0ff; }
+    .room-lock { position: absolute; top: 8px; right: 8px; background: rgba(255,0,85,0.7); font-size: 10px; padding: 3px 7px; border-radius: 8px; }
+
+    /* Inside Voice Room */
+    .voice-room { position: absolute; inset: 0; background: radial-gradient(circle at top, #23123d, #070914); z-index: 300; display: none; flex-direction: column; background-size: cover; background-position: center; }
+    .vr-header { height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 0 14px; background: rgba(14,20,42,0.85); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .stage-12 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 12px; }
+    .mic-seat { display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative; }
+    .seat-circle { width: 48px; height: 48px; border-radius: 50%; background: #151c3d; border: 2px dashed rgba(255,255,255,0.2); display: flex; justify-content: center; align-items: center; font-size: 13px; font-weight: bold; color: #7f91c7; transition: 0.3s; position: relative; }
+    .seat-circle.active { border: 2px solid #00f0ff; background: #1e2957; color: #fff; box-shadow: 0 0 12px rgba(0,240,255,0.6); }
+    .seat-circle.muted { border-color: #ff0055; color: #ff0055; }
+    .seat-name { font-size: 9px; color: #a1b0db; margin-top: 4px; max-width: 58px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Music Player Bar in Room */
+    .music-bar { background: rgba(19, 25, 54, 0.9); border: 1px solid #283463; border-radius: 12px; margin: 0 12px 6px; padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
+
+    /* Modals */
+    .modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); z-index: 800; display: none; justify-content: center; align-items: flex-end; }
+    .modal-sheet { width: 100%; max-width: 440px; background: #101633; border-top: 2px solid #00f0ff; border-radius: 20px 20px 0 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; max-height: 80vh; overflow-y: auto; }
+    
+    /* Targets Multi-select */
+    .targets-bar { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+    .target-pill { background: #182046; border: 1px solid #2b3874; padding: 4px 10px; border-radius: 14px; font-size: 10px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+    .target-pill.selected { border-color: gold; background: #3b2d18; color: gold; font-weight: bold; }
+
+    /* Gift Cards */
+    .gift-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .gift-box { background: #161e42; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 8px; text-align: center; cursor: pointer; }
+    .gift-box.active { border-color: gold; background: #2f271a; box-shadow: 0 0 10px rgba(255,215,0,0.4); }
+
+    /* Bottom Nav */
+    .bottom-nav { height: 60px; background: #0c1022; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-around; align-items: center; position: absolute; bottom: 0; left: 0; width: 100%; z-index: 200; }
+    .nav-btn { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #5f70a3; cursor: pointer; gap: 3px; }
+    .nav-btn.active { color: #00f0ff; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="mobile-frame">
+
+  <!-- Auth -->
+  <div id="authScreen">
+    <div class="brand-title">⚡ PB LIVE STUDIO</div>
+    <input type="text" id="loginName" class="custom-input" placeholder="Your Name" value="☆ Lucky Ak47 🖥️☆">
+    <input type="email" id="loginEmail" class="custom-input" placeholder="Gmail Address" value="lp5006352@gmail.com">
+    <button class="btn-gradient" onclick="handleAuth()">Enter Studio 🚀</button>
+  </div>
+
+  <!-- Header -->
+  <div class="top-header">
+    <div class="brand-logo"><i class="fa-solid fa-bolt"></i> PB LIVE</div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="btn-create-room" onclick="showCreateModal()"><i class="fa-solid fa-plus"></i> Create</button>
+      <div style="background:gold; color:#000; font-weight:bold; font-size:11px; padding:3px 8px; border-radius:12px;" id="headerCoins">0 C</div>
+    </div>
+  </div>
+
+  <!-- Lobby Tab -->
+  <div class="tab-content active" id="tabLobby">
+    <div class="room-grid" id="roomsDisplay"></div>
+  </div>
+
+  <!-- Me Profile Tab -->
+  <div class="tab-content" id="tabProfile">
+    <div style="text-align:center; padding: 20px 0;">
+      <div style="width:70px; height:70px; border-radius:50%; border:2px solid #00f0ff; margin:0 auto 10px; overflow:hidden;">
+        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" style="width:100%; height:100%; object-fit:cover;">
+      </div>
+      <h3 id="profileName">User</h3>
+      <p id="profileId" style="color:#00f0ff; font-size:12px; margin-top:2px;"></p>
+      <div style="background:#131936; border:1px solid #232d5e; border-radius:16px; padding:16px; margin:20px 0;">
+        <span style="font-size:11px; color:#8394ca;">VIP Coin Balance</span>
+        <h2 style="color:gold; font-size:24px; margin-top:4px;" id="profileCoins">0 C</h2>
+      </div>
+      <button class="btn-gradient" style="width:100%; background:#1c244d;" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Voice Room -->
+  <div class="voice-room" id="voiceRoom">
+    <div class="vr-header">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span id="vrTitle" style="color:#00f0ff; font-weight:bold; font-size:12px;">Room</span>
+        <button style="background:#182046; border:none; color:#8da4de; border-radius:6px; padding:2px 6px; font-size:10px;" onclick="showThemeModal()"><i class="fa-solid fa-image"></i> BG</button>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button id="btnToggleMic" style="background:#1e2957; border:1px solid #00f0ff; color:#fff; padding:4px 8px; border-radius:10px; font-size:10px; display:none;" onclick="toggleSelfMic()">🎙️ Mic On</button>
+        <button style="background:#ff0055; border:none; color:#fff; padding:4px 10px; border-radius:10px; font-size:10px; font-weight:bold;" onclick="exitVoiceRoom()">Exit</button>
+      </div>
+    </div>
+
+    <!-- 12-Mic Stage -->
+    <div class="stage-12" id="seatsStage"></div>
+
+    <!-- Background Music Player -->
+    <div class="music-bar">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-music" style="color:#00f0ff;"></i>
+        <span id="musicTitle" style="max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">No Song Playing</span>
+      </div>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <label for="bgSongInput" style="background:#00f0ff; color:#000; padding:2px 8px; border-radius:8px; font-weight:bold; cursor:pointer;">📁 Add Song</label>
+        <input type="file" id="bgSongInput" accept="audio/*" style="display:none;" onchange="loadLocalSong(event)">
+        <audio id="roomAudio" style="display:none;"></audio>
+        <button id="btnPlayPause" style="background:#ff0055; border:none; color:#fff; border-radius:50%; width:24px; height:24px; font-size:10px;" onclick="togglePlayMusic()"><i class="fa-solid fa-play"></i></button>
+      </div>
+    </div>
+
+    <!-- Live Chat Box -->
+    <div style="flex:1; padding:8px 12px; overflow-y:auto; font-size:11px;" id="chatDisplay"></div>
+
+    <!-- Chat & Floating Gift Dock -->
+    <div style="height:50px; background:#0e142a; display:flex; align-items:center; padding:0 10px; gap:8px;">
+      <button style="background:linear-gradient(135deg,#ff0055,gold); border:none; border-radius:50%; width:36px; height:36px; font-size:18px; cursor:pointer;" onclick="showGiftModal()">🎁</button>
+      <input type="text" id="chatInput" style="flex:1; background:#161d3b; border:1px solid #283463; border-radius:20px; padding:7px 12px; color:#fff; font-size:11px; outline:none;" placeholder="Chat live...">
+      <button class="btn-create-room" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+  <!-- Create Room Modal with Cover & Lock Settings -->
+  <div class="modal-overlay" id="createRoomModal">
+    <div class="modal-sheet">
+      <h4 style="color:#00f0ff; text-align:center;">✨ Launch New Room</h4>
+      <input type="text" id="newRoomTitle" class="custom-input" placeholder="Room Title">
+      <select id="newRoomTag" class="custom-input">
+        <option value="Rap Battle">🔥 Rap Battle</option>
+        <option value="Singing">🎤 Music & Singing</option>
+        <option value="VIP Lounge">👑 VIP Elite</option>
+      </select>
+      
+      <!-- Custom Cover Upload -->
+      <label style="font-size:11px; color:#8da4de;">Cover Photo (Gallery):</label>
+      <input type="file" id="coverFileInput" accept="image/*" class="custom-input" onchange="handleCoverUpload(event)">
+
+      <!-- Lock Pin -->
+      <input type="password" id="newRoomPin" class="custom-input" placeholder="Room Password / Pin (Optional)">
+      
+      <button class="btn-gradient" onclick="submitNewRoom()">Launch Room 🚀</button>
+      <button style="background:transparent; border:none; color:#888; font-size:12px; padding:6px;" onclick="hideModals()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Owner Admin Action Sheet (Mute / Kick) -->
+  <div class="modal-overlay" id="adminActionModal">
+    <div class="modal-sheet">
+      <h4 id="adminTargetName" style="color:gold; text-align:center;">User Control</h4>
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <button class="btn-gradient" style="flex:1; background:#0072ff;" onclick="adminMuteAction()"><i class="fa-solid fa-microphone-slash"></i> Mute/Unmute</button>
+        <button class="btn-gradient" style="flex:1; background:#ff0055;" onclick="adminKickAction()"><i class="fa-solid fa-user-xmark"></i> Kick Off Seat</button>
+      </div>
+      <button style="background:transparent; border:none; color:#888; font-size:12px; padding:4px;" onclick="hideModals()">Close</button>
+    </div>
+  </div>
+
+  <!-- Theme Background Modal -->
+  <div class="modal-overlay" id="themeModal">
+    <div class="modal-sheet">
+      <h4 style="color:#00f0ff; text-align:center;">🖼️ Change Room Background</h4>
+      <label style="font-size:11px; color:#8da4de;">Select Photo from Gallery:</label>
+      <input type="file" id="bgFileInput" accept="image/*" class="custom-input" onchange="handleBgUpload(event)">
+      <button class="btn-gradient" onclick="applySolidBg('radial-gradient(circle at top, #3d1229, #070914)')">Neon Red</button>
+      <button class="btn-gradient" style="background:#0072ff;" onclick="applySolidBg('radial-gradient(circle at top, #10263d, #070914)')">Cyber Blue</button>
+      <button style="background:transparent; border:none; color:#888; font-size:12px; padding:4px;" onclick="hideModals()">Close</button>
+    </div>
+  </div>
+
+  <!-- Multi-Select Luxury Gift Modal -->
+  <div class="modal-overlay" id="giftBoxModal">
+    <div class="modal-sheet">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:gold; font-weight:bold; font-size:12px;">🎁 VIP Gifts</span>
+        <button style="background:#283463; border:none; color:#00f0ff; font-size:10px; padding:2px 8px; border-radius:8px;" onclick="selectAllTargets()">Select All</button>
+      </div>
+
+      <!-- Tick Target Seats -->
+      <div class="targets-bar" id="targetPillsDisplay"></div>
+
+      <!-- Gifts Grid -->
+      <div class="gift-grid" id="giftItemsDisplay"></div>
+
+      <button class="btn-gradient" onclick="submitMultiGift()">Send Multi Gift 🚀</button>
+      <button style="background:transparent; border:none; color:#888; font-size:12px; padding:4px;" onclick="hideModals()">Close</button>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <div class="bottom-nav">
+    <div class="nav-btn active" onclick="switchTab('tabLobby', this)"><i class="fa-solid fa-house" style="font-size:16px;"></i><span>Party</span></div>
+    <div class="nav-btn" onclick="switchTab('tabProfile', this)"><i class="fa-solid fa-user" style="font-size:16px;"></i><span>Profile</span></div>
+  </div>
+
+</div>
+
+<script>
+  const socket = io();
+  let user = null, curRoom = null, stageSeats = Array(12).fill(null), giftList = [], activeGift = null;
+  let selectedTargets = [], tempCover = '', adminSelectedSeat = null;
+
+  let saved = localStorage.getItem('pb_live_user');
+  if (saved) { user = JSON.parse(saved); document.getElementById('authScreen').style.display = 'none'; syncUserDisplay(); }
+
+  fetch('/api/rooms').then(r => r.json()).then(renderRooms);
+  fetch('/api/gifts').then(r => r.json()).then(g => { giftList = g; renderGiftList(); });
+
+  function renderRooms(rms) {
+    document.getElementById('roomsDisplay').innerHTML = rms.map(r => `
+      <div class="room-card" onclick="checkEnterRoom('${r.id}')">
+        <span class="room-tag">${r.tag}</span>
+        ${r.isLocked ? '<span class="room-lock"><i class="fa-solid fa-lock"></i></span>' : ''}
+        <img src="${r.cover}">
+        <div class="room-info" style="padding:8px 10px;">
+          <div style="font-size:12px; font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.name}</div>
+          <div style="font-size:10px; color:#7f91c7; margin-top:2px;">👑 ${r.host}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderGiftList() {
+    document.getElementById('giftItemsDisplay').innerHTML = giftList.map(g => `
+      <div class="gift-box" id="gb_${g.id}" onclick="selectGift('${g.id}')">
+        <div style="font-size:22px;">${g.icon}</div>
+        <div style="font-size:10px; font-weight:bold; margin-top:2px;">${g.name}</div>
+        <div style="font-size:9px; color:gold;">${g.price.toLocaleString()} C</div>
+        <div style="font-size:8px; color:#6f80b0;">${g.desc}</div>
+      </div>
+    `).join('');
+  }
+
+  function selectGift(id) {
+    activeGift = giftList.find(x => x.id === id);
+    document.querySelectorAll('.gift-box').forEach(b => b.classList.remove('active'));
+    document.getElementById('gb_' + id).classList.add('active');
+  }
+
+  function handleAuth() {
+    let email = document.getElementById('loginEmail').value;
+    let username = document.getElementById('loginName').value;
+    fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, username }) })
+      .then(r => r.json()).then(d => {
+        if (d.success) {
+          user = d.user;
+          localStorage.setItem('pb_live_user', JSON.stringify(user));
+          document.getElementById('authScreen').style.display = 'none';
+          syncUserDisplay();
+        }
+      });
+  }
+
+  function syncUserDisplay() {
+    document.getElementById('headerCoins').innerText = (user.coins || 0).toLocaleString() + ' C';
+    document.getElementById('profileCoins').innerText = (user.coins || 0).toLocaleString() + ' C';
+    document.getElementById('profileName').innerText = user.username;
+    document.getElementById('profileId').innerText = 'PB ID: ' + user.pbId;
+  }
+
+  function switchTab(tId, el) {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+    document.getElementById(tId).classList.add('active');
+  }
+
+  function showCreateModal() { document.getElementById('createRoomModal').style.display = 'flex'; }
+  function showThemeModal() { document.getElementById('themeModal').style.display = 'flex'; }
+  function hideModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); }
+
+  function handleCoverUpload(e) {
+    let reader = new FileReader();
+    reader.onload = () => { tempCover = reader.result; };
+    if (e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+  }
+
+  function handleBgUpload(e) {
+    let reader = new FileReader();
+    reader.onload = () => {
+      let bgStyle = `url('${reader.result}')`;
+      document.getElementById('voiceRoom').style.backgroundImage = bgStyle;
+      socket.emit('update_room_bg', { roomId: curRoom.id, bg: bgStyle });
+      hideModals();
+    };
+    if (e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+  }
+
+  function applySolidBg(style) {
+    document.getElementById('voiceRoom').style.backgroundImage = 'none';
+    document.getElementById('voiceRoom').style.background = style;
+    socket.emit('update_room_bg', { roomId: curRoom.id, bg: style });
+    hideModals();
+  }
+
+  function submitNewRoom() {
+    let name = document.getElementById('newRoomTitle').value;
+    let tag = document.getElementById('newRoomTag').value;
+    let pin = document.getElementById('newRoomPin').value;
+    if (!name) return alert('Enter Title');
+    socket.emit('create_room', { name, tag, pin, cover: tempCover, host: user.username, hostEmail: user.email });
+    hideModals();
+ 
