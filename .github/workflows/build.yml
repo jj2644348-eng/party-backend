@@ -1,24 +1,42 @@
 name: Build Android APK
 
 on:
-  push:
-    branches: [ master, main ]
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: subosito/flutter-action@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          flutter-version: '3.x'
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.0'
           channel: 'stable'
-      - run: flutter pub get
-      - run: flutter build apk --split-per-abi
+
+      - name: Get dependencies
+        run: flutter pub get
+        working-directory: ./live_audio_room
+
+      - name: Build APK
+        run: flutter build apk --release
+        working-directory: ./live_audio_room
+
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: live-party-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          name: app-release
+          path: live_audio_room/build/app/outputs/flutter-apk/app-release.apk
           
